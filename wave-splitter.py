@@ -6,14 +6,14 @@ headeroffset = 36       #additional size for full chunk size, wave/riff header m
 #-------------------------------------------------------------------------
 def usage():
     # print sys.argv[0] + " (version: " + str(__version__) + ")"
-    # print sys.argv[0] + " (-m s -p <port> | -m b -p <port> -n <name> | -m p -n <name> | -m a -p <port>]) (-a <apdu> | -s <file> | -f <file>) [-c <count> -v] " 
     print ("")
     print ("This script reads a wave file, splits it in to chunks, and saves each chunk as a wave file.")
     print ("")
     print ("  -h, --help      print this help")
     print ("  -v, --verbose   print verbose output")
-    print ("  -f, --file      APDU input data file")
-    print ("  -c, --count     loop count, default=1, 0=>unlimited")
+    print ("  -f, --file      wave input file")
+    print ("  -c, --count     loop count")
+    print ("  -m, --message   optional message to encode")
     print ("")
     print ("")
     exit(1)
@@ -54,7 +54,7 @@ def main():
     print("Hey yo hey")
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hvf:c:",["help", "verbose", "file=", "count="])
+        opts, args = getopt.getopt(sys.argv[1:],"hvf:c:m:",["help", "verbose", "file=", "count=", "message="])
     except getopt.GetoptError as err:
         print (err)
         usage()
@@ -62,6 +62,8 @@ def main():
     verbose = False
     inputfilename = None
     numberchunks = 0
+    encodemessage = False
+    plaintext = None
 
     print(opts)
     print (args)
@@ -74,8 +76,13 @@ def main():
         elif opt in ("-f", "--file"):
             inputfilename = arg
         elif opt in ("-c", "--count"):
-            print(arg)
             numberchunks = int(arg)
+        elif opt in ("-m", "--message"):
+            encodemessage = True
+            plaintext = arg
+            if plaintext == "":
+                print("Plaintext message can not be zero length")
+                usage()
         else:
             print("Unknown opt")
             usage()
@@ -128,7 +135,6 @@ def main():
         print ("Section size:", choppedwavesize )
         print ("")
 
-    outputheader = waveheader
     outputchunksize = choppedwavesize + headeroffset
     outputchunkbytes = bytearray(outputchunksize.to_bytes(4, byteorder="little"))
     outputwavebytes = bytearray(choppedwavesize.to_bytes(4, byteorder="little"))
@@ -139,6 +145,7 @@ def main():
         print ("Output file RIFF/WAVE header information:")
         print_riff_header(outputheader)
 
+    chunkptr = []
 
     for x in range(numberchunks):    
         filename = "chunk" + str(x) + ".wav"
@@ -146,8 +153,51 @@ def main():
             print("Creating output file ", filename)
         outputfile = open(filename, "wb")
         outputfile.write(outputheader)
+        chunkptr.append(wavefile.tell())
         outputchunk = wavefile.read(choppedwavesize)
         outputfile.write(outputchunk)
+        outputfile.close
+
+    if encodemessage:
+        messagetext = plaintext.upper()
+
+        messagesize = len(messagetext)
+        encodewavesize = (choppedwavesize * messagesize)
+        encodechunksize = encodewavesize + headeroffset
+        outputchunkbytes = bytearray(encodechunksize.to_bytes(4, byteorder="little"))
+        outputwavebytes = bytearray(encodewavesize.to_bytes(4, byteorder="little"))
+
+        outputheader = riff + outputchunkbytes + fileformat + subchunk1id + subchunk1size + audioformat + numchannels + samplerate + byterate + blockalign + bitspersample  + subchunk2id + outputwavebytes
+
+        if verbose:
+            print("Encoding message ", plaintext, " as ", messagetext)
+            print("Message length in characters: ", messagesize)
+            print("Full chunk size: ", encodechunksize)
+            print("Wave chunk size: ", encodewavesize)
+            print("")
+            print("Encoded message RIFF/WAVE header information:")
+            print_riff_header(outputheader)
+
+        outputfile = open("encoded.wav", "wb")
+        outputfile.write(outputheader)
+        for x in range(messagesize):
+            if 'A' <= messagetext[x] <= 'Z':
+                if verbose:
+                    print(str(ord(messagetext[x])))
+                encodeptr = ord(messagetext[x]) - 64
+                if encodeptr > numberchunks:
+                    encodeptr = 0
+            else:
+                encodeptr = 0
+            
+            if verbose:
+                print("Encode pointer: ", encodeptr)
+                print("Seeking input value location: ", chunkptr[encodeptr])
+
+            wavefile.seek(chunkptr[encodeptr])
+            outputchunk = wavefile.read(choppedwavesize)
+            outputfile.write(outputchunk)
+
         outputfile.close
 
     wavefile.close
