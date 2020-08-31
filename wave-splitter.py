@@ -12,7 +12,7 @@ def usage():
     print ("  -h, --help      print this help")
     print ("  -v, --verbose   print verbose output")
     print ("  -f, --file      wave input file")
-    print ("  -c, --count     loop count")
+    print ("  -c, --count     chunk count")
     print ("  -m, --message   optional message to encode")
     print ("")
     print ("")
