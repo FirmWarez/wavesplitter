@@ -5,15 +5,20 @@ headeroffset = 36       #additional size for full chunk size, wave/riff header m
 #-------------------------------------------------------------------------
 #-------------------------------------------------------------------------
 def usage():
-    # print sys.argv[0] + " (version: " + str(__version__) + ")"
     print ("")
     print ("This script reads a wave file, splits it in to chunks, and saves each chunk as a wave file.")
+    print ("This has only been tested with 16 bit PCM mono files; other formats untested and may have issues.")
+    print ("If the optional message argument is supplied, this will create a wave file of the message where:")
+    print ("    first chunk (0) is space or any non alphabetic characters")
+    print ("    a = second chunk (1), b = third chunk (2), etc")
+    print ("    No case information or puncutation is contained in the encoded message")
+    print ("    If number of chunks is less than 27, unencoded characters will be space (chunk 0)")
     print ("")
     print ("  -h, --help      print this help")
     print ("  -v, --verbose   print verbose output")
     print ("  -f, --file      wave input file")
-    print ("  -c, --count     chunk count")
-    print ("  -m, --message   optional message to encode")
+    print ("  -c, --count     optional chunk count, defaults to 27 (alphabet and space)")
+    print ("  -m, --message   optional plaintext message to encode")
     print ("")
     print ("")
     exit(1)
@@ -61,12 +66,13 @@ def main():
         
     verbose = False
     inputfilename = None
-    numberchunks = 0
+    numberchunks = 27       # default to alphabet plus space
     encodemessage = False
     plaintext = None
 
-    print(opts)
-    print (args)
+    if verbose:
+        print(opts)
+        print (args)
 
     for opt, arg in opts:
         if opt in ("-h", "--help"):
@@ -91,10 +97,6 @@ def main():
         print ("Must have an input file name")
         usage()
 
-    if numberchunks == 0:
-        print ("Must specify number of output chunks")
-        usage()
-
     if verbose:
         print ("Attempting to open ", inputfilename)
 
@@ -112,6 +114,7 @@ def main():
         print ("Input file RIFF/WAVE header information:")
         print_riff_header(waveheader)
 
+    # Note: not all of this is used and this could be cleaned up
     riff = bytearray(waveheader[0:4])
     chunksize = bytearray(waveheader[4:8])
     fileformat = bytearray(waveheader[8:12])
@@ -185,7 +188,7 @@ def main():
                 if verbose:
                     print(str(ord(messagetext[x])))
                 encodeptr = ord(messagetext[x]) - 64
-                if encodeptr > numberchunks:
+                if encodeptr > numberchunks - 1:
                     encodeptr = 0
             else:
                 encodeptr = 0
